@@ -12,7 +12,7 @@ public class Agent {
     }
 
     // white is always positive
-    private int max(int depth) {
+    private int max(int depth, int alpha, int beta) {
         if (board.inCheckmate(true)) {
             return Integer.MIN_VALUE;
         }
@@ -23,7 +23,15 @@ public class Agent {
             return board.evaluate();
         }
 
-        List<Move> allMoves = this.board.getAllMoves(true);
+        boolean inCheck = this.board.inCheck(true);
+        List<Move> allMoves;
+        
+        if (inCheck) {
+            allMoves = board.getCheckBreakingMoves(true);
+        } else {
+            allMoves = this.board.getAllMoves(true);
+        }
+
         int maxEval = Integer.MIN_VALUE; 
         for (Move move : allMoves) {
             this.board.makeMove(move);
@@ -33,17 +41,21 @@ public class Agent {
                 continue;
             }
 
-            int eval = min(depth - 1); 
+            int eval = min(depth - 1, alpha, beta);
+            maxEval = Math.max(eval, maxEval);
             this.board.unmakeMove(move);
 
-            maxEval = Math.max(eval, maxEval);
+            if (maxEval >= beta) {
+                break;
+            }
+            alpha = Math.max(alpha, maxEval);
         }
 
         return maxEval; 
     }
 
     // black is always negative
-    private int min(int depth) {
+    private int min(int depth, int alpha, int beta) {
          if (board.inCheckmate(false)) {
             return Integer.MAX_VALUE;
          }
@@ -54,7 +66,15 @@ public class Agent {
             return board.evaluate();
          }
 
-        List<Move> allMoves = this.board.getAllMoves(false);
+        boolean inCheck = this.board.inCheck(false);
+        List<Move> allMoves;
+
+        if (inCheck) {
+            allMoves = board.getCheckBreakingMoves(false);
+        } else {
+            allMoves = this.board.getAllMoves(false);
+        }
+
         int minEval = Integer.MAX_VALUE; 
         for (Move move : allMoves) {
             this.board.makeMove(move);
@@ -64,10 +84,14 @@ public class Agent {
                 continue;
             }
 
-            int eval = max(depth - 1); 
+            int eval = max(depth - 1, alpha, beta);
+            minEval = Math.min(eval, minEval);
             this.board.unmakeMove(move);
 
-            minEval = Math.min(eval, minEval);
+            if (minEval <= alpha) {
+                break;
+            }
+            beta = Math.min(beta, minEval);
         }
 
         return minEval;
@@ -76,9 +100,16 @@ public class Agent {
     private Move findBestMove() {
         Move bestMove = null;
         int bestEval = isAgentWhite ? Integer.MIN_VALUE : Integer.MAX_VALUE;
-        boolean inCheck = this.board.inCheck(isAgentWhite);
 
-        List<Move> allMoves = this.board.getAllMoves(this.isAgentWhite);
+        boolean inCheck = this.board.inCheck(isAgentWhite);
+        
+        List<Move> allMoves;
+        if (inCheck) {
+            allMoves = board.getCheckBreakingMoves(this.isAgentWhite);
+        } else {
+            allMoves = this.board.getAllMoves(this.isAgentWhite);
+        }
+        
         for (Move move : allMoves) {
             this.board.makeMove(move);
 
@@ -88,7 +119,7 @@ public class Agent {
               continue;
             }
 
-            int eval = isAgentWhite ? min(this.depth - 1) : max(this.depth - 1);
+            int eval = isAgentWhite ? min(this.depth - 1, Integer.MIN_VALUE, Integer.MAX_VALUE) : max(this.depth - 1, Integer.MIN_VALUE, Integer.MAX_VALUE);
 
             if (isAgentWhite && eval > bestEval) {
                 bestEval = eval; 

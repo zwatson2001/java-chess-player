@@ -5,10 +5,11 @@ public class Main {
     public static void main(String[] args) {
         // "RNBKQBNR/PPPPPPPP/8/8/8/8/pppppppp/rnbkqbnr"
         Board board = new Board("RNBKQBNR/PPPPPPPP/8/8/8/8/pppppppp/rnbkqbnr");
-        Game game = new Game(board, true);
+        boolean isPlayerWhite = true;
+        Game game = new Game(board, isPlayerWhite);
         Scanner scanner = new Scanner(System.in);
         boolean keepPlaying = true;
-        Agent agent = new Agent(board, false, 3);
+        Agent agent = new Agent(board, !isPlayerWhite, 8);
         Random r = new Random();
         int numOfErrors = 0;
 
@@ -24,12 +25,14 @@ public class Main {
         System.out.println(board);
 
         while (keepPlaying) {
-            System.out.println("Input move:");
-
             if (board.inCheckmate(true)) {
                 System.out.println("I almost feel bad. Not really though.");
                 System.out.println("* * * * * * *\n* YOU LOSE! *\n* * * * * * *");
+                keepPlaying = false;
+                break;
             }
+
+            System.out.println("Input move:");
 
             String input = scanner.nextLine();
             if (input.toLowerCase().contains("quit")) {
@@ -65,7 +68,7 @@ public class Main {
                 System.out.println("Thinking...");
 
                 if (!agent.makeBestMove()) {
-                    if (board.inCheck(false)) {
+                    if (board.inCheck(!isPlayerWhite)) {
                         System.out.println("Shit.\n");
                         System.out.println("* * * * * * *\n*  YOU WIN! *\n* * * * * * *");
                         break;
@@ -77,6 +80,9 @@ public class Main {
                 }
     
                 System.out.println(board + "\n");
+                if (board.inCheck(isPlayerWhite)) {
+                    System.out.println("Check.");
+                }
 
                 numOfErrors = 0;
             }

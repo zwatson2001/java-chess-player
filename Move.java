@@ -137,4 +137,4 @@ public class Move {
     public void setMoveCountDraw(int moveCountDraw) {
         this.moveCountDraw = moveCountDraw; 
     }
- }
+}

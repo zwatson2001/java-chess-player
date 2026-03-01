@@ -3,7 +3,6 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Stack;
 
 import static java.util.Map.entry;
 
@@ -95,6 +94,9 @@ public class Board {
     private long currentHash;
     private long[] history = new long[1024];
 
+    // opening = 0, middlegame = 1, endgame = 2
+    private int gamePhase = 0;
+
     // piece-square tables
     private final Map<PieceName, int[]> pieceSquareTableMap = Map.ofEntries(
         entry(
@@ -153,6 +155,32 @@ public class Board {
 
     public long[] getHistory() {
         return this.history;
+    }
+
+    private boolean isWhite(PieceName pieceName) {
+        return pieceName.toString().substring(0,5).equals("white");
+    }
+
+    private long getPieceOccupancy() {
+        return 
+            pieceMap.get(PieceName.whiteQueens) |
+            pieceMap.get(PieceName.blackQueens) |
+            pieceMap.get(PieceName.whiteRooks) |
+            pieceMap.get(PieceName.blackRooks) |
+            pieceMap.get(PieceName.whiteBishops) |
+            pieceMap.get(PieceName.blackBishops) |
+            pieceMap.get(PieceName.whiteKnights) |
+            pieceMap.get(PieceName.blackKnights);
+    }
+
+    private int getGamePhase() {
+        if (this.currentPly <= 20) {
+            return 0;
+        } else if (Long.bitCount(getPieceOccupancy()) <= 4) {
+            return 2;
+        } else {
+            return 1;
+        }
     }
 
     // fen string to board converter
@@ -368,10 +396,6 @@ public class Board {
             pieceMap.get(PieceName.blackKing);
     }
 
-    private boolean isWhite(PieceName pieceName) {
-        return pieceName.toString().substring(0,5).equals("white");
-    }
-
     // formula for calculating sliding piece moves
     private long hyperbolaQuintessence(long mask, long pieceLocation, long occupied) {
         return (
@@ -426,10 +450,10 @@ public class Board {
             ((startingLocation << 1) & ~fileMasks[0]) | 
             ((startingLocation >>> 8) & ~rankMasks[0]) | 
             ((startingLocation << 8) & ~rankMasks[7]) | 
-            ((startingLocation >>> 7) & ~(rankMasks[7] | fileMasks[0])) | 
-            ((startingLocation << 7) & ~(rankMasks[0] | fileMasks[7]) | 
-            ((startingLocation >>> 9) & ~(rankMasks[7] | fileMasks[7])) | 
-            ((startingLocation << 9) & ~(rankMasks[0] | fileMasks[0])));
+            ((startingLocation >>> 7) & ~(rankMasks[0] | fileMasks[0])) | 
+            ((startingLocation << 7) & ~(rankMasks[7] | fileMasks[7]) | 
+            ((startingLocation >>> 9) & ~(rankMasks[0] | fileMasks[7])) | 
+            ((startingLocation << 9) & ~(rankMasks[7] | fileMasks[0])));
 
         return destinations & ~ownPieces;
     }
