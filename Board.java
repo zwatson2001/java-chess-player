@@ -3,7 +3,11 @@ import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Stack;
+
 import static java.util.Map.entry;
+
+import java.security.SecureRandom;
 
 public class Board {
     private final EnumMap<PieceName, Long> pieceMap = new EnumMap<>(PieceName.class);
@@ -78,7 +82,18 @@ public class Board {
 
     private long enPassantTarget = 0L;
 
-    private int moveCountDraw = 0; 
+    private int moveCountDraw = 0; // ply since last pawn move or capture
+    private int currentPly = 0; // moves since the start of the game
+
+    /*
+        0-767 -> piece type x square
+        768-771 -> white kingside castle rights, white queenside, black kingside, black queenside
+        772-779 -> files of en passant square
+        780 -> black to move?
+     */
+    private long[] zobristKeys = new long[781];
+    private long currentHash;
+    private long[] history = new long[1024];
 
     // piece-square tables
     private final Map<PieceName, int[]> pieceSquareTableMap = Map.ofEntries(
@@ -116,6 +131,9 @@ public class Board {
         }
 
         setBoard(position);
+        initZobristKeys();
+        this.currentHash = hashBoard(false);
+        history[0] = this.currentHash;
     }
 
     public long[] getRankMasks() {
@@ -127,6 +145,14 @@ public class Board {
 
     public int getMoveCountDraw() {
         return this.moveCountDraw; 
+    }
+
+    public int getCurrentPly() {
+        return this.currentPly;
+    }
+
+    public long[] getHistory() {
+        return this.history;
     }
 
     // fen string to board converter
@@ -162,11 +188,80 @@ public class Board {
         }
     }
 
+    private void initZobristKeys() {
+        SecureRandom r = new SecureRandom();
+
+        for (int i = 0; i < zobristKeys.length; i++){
+            this.zobristKeys[i] = r.nextLong();
+        }
+    }
+
     public void setLastMoveOrigin(long origin) {
         this.lastMoveOrigin = origin;
     }
 
     public String toString() { return displayBoard(false, true); }
+
+    // converts the board state into a zobrist hash
+    private long hashBoard(boolean blackToMove) {
+        PieceName[] pieceNames = PieceName.values(); 
+        List<Long> pieceHashes = new ArrayList<>();
+
+        for (int i = 0; i < pieceNames.length; i++) {
+            long square = pieceMap.get(pieceNames[i]);
+            pieceHashes.add(zobristKeys[64 * (i + 1) - Long.numberOfTrailingZeros(square)]);
+        }
+        long hash = pieceHashes.stream().reduce(0L, (a,b) -> a ^ b);
+
+        // add castling rights
+        hash ^= zobristKeys[768] ^ zobristKeys[769] ^ zobristKeys[770] ^ zobristKeys[771];
+
+        if (blackToMove) {
+            hash ^= zobristKeys[780];
+        }
+
+        return hash;
+    }
+
+    // updates the hash based on a move that was made/unmade
+    private void updateHash(Move move) {
+        PieceName pieceType = move.getPieceType();
+        boolean white = isWhite(pieceType);
+        int pieceNumber = Arrays.asList(PieceName.values()).indexOf(pieceType);
+        long origin = move.getOrigin();
+        long destination = move.getDestination();
+
+        currentHash ^= 
+            zobristKeys[64 * (pieceNumber + 1) - Long.numberOfTrailingZeros(origin)] ^
+            zobristKeys[64 * (pieceNumber + 1) - Long.numberOfTrailingZeros(destination)]; 
+
+        if (move.getCapture() != null) {
+            int capturedPieceNumber = Arrays.asList(PieceName.values()).indexOf(move.getCapture());
+            currentHash ^= zobristKeys[64 * (capturedPieceNumber + 1) - Long.numberOfTrailingZeros(destination)];
+        }
+
+        // switch sides
+        currentHash ^= zobristKeys[780];
+
+        // check for change in castling rights
+        if (move.getRevokedCastleRights()) {
+            currentHash ^= white ? (zobristKeys[768] ^ zobristKeys[769]) : (zobristKeys[770] ^ zobristKeys[771]);
+        } else {
+            if (move.getFirstKingsideRookMove()) {
+                currentHash ^= white ? zobristKeys[768] : zobristKeys[770];
+            } else if (move.getFirstQueensideRookMove()) {
+                currentHash ^= white ? zobristKeys[769] : zobristKeys[771];
+            }
+        }
+
+        // add in en passant square
+        if (move.getEnPassantTarget() != 0L) {
+            currentHash ^= zobristKeys[(Long.numberOfTrailingZeros(move.getEnPassantTarget()) % 8) + 772];
+        }
+        if (enPassantTarget != 0L) {
+            currentHash ^= zobristKeys[(Long.numberOfTrailingZeros(enPassantTarget) % 8) + 772];
+        }
+    }
 
     public String displayBoard(boolean showMoves, boolean showLastMoveOrigin) {
         long allWhiteMoves = 0L;
@@ -696,7 +791,9 @@ public class Board {
             this.enPassantTarget = 0L;
         }
 
-        System.out.println(moveCountDraw);
+        updateHash(move);
+        currentPly ++;
+        history[currentPly] = this.currentHash;
     }
 
     public void unmakeMove(Move move) {
@@ -784,7 +881,8 @@ public class Board {
 
         this.enPassantTarget = move.getEnPassantTarget();
 
-        System.out.println(moveCountDraw);
+        currentPly --;
+        this.currentHash = history[moveCountDraw];
     }
 
     public boolean checkLegality(Move move) {
@@ -957,4 +1055,21 @@ public class Board {
 
         return checkBreakingMoves;
     }
+
+    public boolean checkThreefoldRepetition() {
+        int currentPosRepetitions = 0; 
+        for (int i = this.currentPly - 2; i < this.moveCountDraw; i--) {
+            if (i < 0) { return false; }
+
+            if (this.currentHash == history[i]) {
+                currentPosRepetitions ++;
+            }
+
+            if (currentPosRepetitions >= 2) { return true; }
+        }
+        
+        return false;
+    }
 }
+
+

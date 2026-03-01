@@ -24,6 +24,8 @@ public class Main {
         System.out.println(board);
 
         while (keepPlaying) {
+            System.out.println("Input move:");
+
             if (board.inCheckmate(true)) {
                 System.out.println("I almost feel bad. Not really though.");
                 System.out.println("* * * * * * *\n* YOU LOSE! *\n* * * * * * *");
@@ -53,6 +55,14 @@ public class Main {
                     System.out.println("* * * * * * * * * * * * *\n* DRAW BY 50 MOVE RULE! *\n* * * * * * * * * * * * *");
                     break;
                 }
+
+                if (board.checkThreefoldRepetition()) {
+                    System.out.println("We appear to be at an impasse. It's probably your fault.");
+                    System.out.println("* * * * * * * * * * * * * * * * *\n* DRAW BY THREEFOLD REPETITION! *\n* * * * * * * * * * * * * * * * *");
+                    break;
+                }
+
+                System.out.println("Thinking...");
 
                 if (!agent.makeBestMove()) {
                     if (board.inCheck(false)) {
